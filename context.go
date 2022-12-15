@@ -1,4 +1,4 @@
-package context
+package main
 
 import (
 	"encoding/json"
@@ -6,14 +6,14 @@ import (
 	"net/http"
 )
 
-// Context 自定义, 包含基本的 w/r
+// Context 自定义, 包含基本的 write & request
 type Context struct {
-	Writer http.ResponseWriter
-	Reader *http.Request
+	Writer  http.ResponseWriter
+	Request *http.Request
 }
 
 func (c *Context) ReadJson(data interface{}) error {
-	body, err := io.ReadAll(c.Reader.Body)
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		return err
 	}
@@ -35,7 +35,7 @@ func (c *Context) WriteJson(status int, data interface{}) error {
 
 func NewContext(w http.ResponseWriter, r *http.Request) *Context {
 	return &Context{
-		Writer: w,
-		Reader: r,
+		Writer:  w,
+		Request: r,
 	}
 }
