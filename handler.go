@@ -1,7 +1,7 @@
 package main
 
 type Handler interface {
-	ServerHTTP(c *Context)
+	ServeHTTP(c *Context)
 	Routable
 }
 

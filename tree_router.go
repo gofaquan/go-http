@@ -93,3 +93,9 @@ func (t *TreeHandler) buildSubTree(root *node, paths []string, handlerFn HandleF
 	}
 	cur.handler = handlerFn
 }
+
+func NewTreeHandler() *TreeHandler {
+	return &TreeHandler{
+		root: &node{},
+	}
+}
