@@ -15,7 +15,7 @@ func (m *MapHandler) key(method, path string) string {
 	return fmt.Sprintf("%s#%s", method, path)
 }
 
-func (m *MapHandler) ServerHTTP(c *Context) {
+func (m *MapHandler) ServeHTTP(c *Context) {
 	request := c.Request
 	key := m.key(request.Method, request.URL.Path)
 	// 加载路由
