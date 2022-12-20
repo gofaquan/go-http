@@ -1,10 +1,16 @@
 package main
 
-import "net/http"
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+)
 
 // Server 定义 http Server 的顶级抽象
 type Server interface {
 	Start(address string) error
+	Shutdown(ctx context.Context) error
 	Routable
 }
 
@@ -36,7 +42,13 @@ func (s *sdkHttpServer) Start(address string) error {
 	return http.ListenAndServe(address, s)
 	//return http.ListenAndServe(address, s.handler)
 }
-
+func (s *sdkHttpServer) Shutdown(ctx context.Context) error {
+	// sleep 一下来模拟这个过程
+	fmt.Printf("%s shutdown...\n", s.Name)
+	time.Sleep(time.Second)
+	fmt.Printf("%s shutdown!!!\n", s.Name)
+	return nil
+}
 func NewSdkHttpServer(name string, builders ...FilterBuilder) Server {
 	handler := NewTreeHandler()
 	var root Filter = handler.ServeHTTP
