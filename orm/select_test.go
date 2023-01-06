@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-type TestModel struct {
-	Id        int64
-	FirstName string
-	Age       int8
-	LastName  *sql.NullString
-}
-
 func TestSelector_Build(t *testing.T) {
+	type TestModel struct {
+		Id        int64
+		FirstName string
+		Age       int8
+		LastName  *sql.NullString
+	}
+
 	testCases := []struct {
 		name      string
 		q         QueryBuilder
@@ -52,6 +52,68 @@ func TestSelector_Build(t *testing.T) {
 				SQL: "SELECT * FROM `test_db`.`test_model`;",
 			},
 		},
+		{
+			// 单一简单条件
+			name: "single and simple predicate",
+			q: NewSelector[TestModel]().From("`test_model_t`").
+				Where(C("Id").EQ(1)),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `test_model_t` WHERE `Id` = ?;",
+				Args: []any{1},
+			},
+		},
+		{
+			// 多个 predicate
+			name: "multiple predicates",
+			q: NewSelector[TestModel]().
+				Where(C("Age").GT(18), C("Age").LT(35)),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `TestModel` WHERE (`Age` > ?) AND (`Age` < ?);",
+				Args: []any{18, 35},
+			},
+		},
+		{
+			// 使用 AND
+			name: "and",
+			q: NewSelector[TestModel]().
+				Where(C("Age").GT(18).And(C("Age").LT(35))),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `TestModel` WHERE (`Age` > ?) AND (`Age` < ?);",
+				Args: []any{18, 35},
+			},
+		},
+		{
+			// 使用 OR
+			name: "or",
+			q: NewSelector[TestModel]().
+				Where(C("Age").GT(18).OR(C("Age").LT(35))),
+			wantQuery: &Query{
+				SQL:  "SELECT * FROM `TestModel` WHERE (`Age` > ?) OR (`Age` < ?);",
+				Args: []any{18, 35},
+			},
+		},
+		{
+			// 使用 NOT
+			name: "not",
+			q:    NewSelector[TestModel]().Where(Not(C("Age").GT(18))),
+			wantQuery: &Query{
+				// NOT 前面有两个空格，因为我们没有对 NOT 进行特殊处理
+				SQL:  "SELECT * FROM `TestModel` WHERE  NOT (`Age` > ?);",
+				Args: []any{18},
+			},
+		},
+		//{
+		// 使用 OR
+		//name: "or",
+		//q: NewSelector[TestModel]().
+		//	Where(C("Age").GT(18).
+		//		OR(C("Age").LT(35).
+		//			And(C("Age").LT(35)))),
+		//wantQuery: &Query{
+		//	SQL:  "SELECT * FROM `TestModel` WHERE (`Age` > ?) OR (`Age` < ?) AND (`Age` < ?);",
+		//	Args: []any{18, 35, 35},
+		//},
+		//},
 	}
 
 	for _, tc := range testCases {
