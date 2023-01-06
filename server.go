@@ -17,7 +17,7 @@ type Server interface {
 // Routable 可路由的
 type Routable interface {
 	// Route 设定一个路由，命中该路由的会执行 handleFunc 的代码
-	Route(method, pattern string, handleFunc HandleFunc)
+	addRoute(method, pattern string, handleFunc handleFunc)
 }
 
 // sdkHttpServer 这个是基于 net/http 这个包实现的 http server
@@ -28,9 +28,9 @@ type sdkHttpServer struct {
 	root    Filter
 }
 
-func (s *sdkHttpServer) Route(method string, pattern string,
-	handlerFunc HandleFunc) {
-	s.handler.Route(method, pattern, handlerFunc)
+func (s *sdkHttpServer) addRoute(method string, pattern string,
+	handlerFunc handleFunc) {
+	s.handler.addRoute(method, pattern, handlerFunc)
 }
 
 func (s *sdkHttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -49,9 +49,9 @@ func (s *sdkHttpServer) Shutdown(ctx context.Context) error {
 	fmt.Printf("%s shutdown!!!\n", s.Name)
 	return nil
 }
-func NewSdkHttpServer(name string, builders ...FilterBuilder) Server {
-	handler := NewTreeHandler()
-	var root Filter = handler.ServeHTTP
+func NewSdkHttpServer(name string, builders ...FilterBuilder) *sdkHttpServer {
+	handler := NewHandlerBasedOnTree()
+	var root Filter = handler.serve
 	for i := len(builders) - 1; i >= 0; i-- {
 		b := builders[i]
 		root = b(root)
@@ -63,4 +63,19 @@ func NewSdkHttpServer(name string, builders ...FilterBuilder) Server {
 		root:    root,
 	}
 	return res
+}
+
+func (s *sdkHttpServer) Get(path string, handler handleFunc) {
+	s.handler.addRoute(http.MethodGet, path, handler)
+}
+
+func (s *sdkHttpServer) Post(path string, handler handleFunc) {
+	s.handler.addRoute(http.MethodPost, path, handler)
+}
+
+func (s *sdkHttpServer) Delete(path string, handler handleFunc) {
+	s.handler.addRoute(http.MethodDelete, path, handler)
+}
+func (s *sdkHttpServer) PUT(path string, handler handleFunc) {
+	s.handler.addRoute(http.MethodPut, path, handler)
 }
