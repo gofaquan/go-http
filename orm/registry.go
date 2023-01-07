@@ -8,28 +8,56 @@ import (
 	"unicode"
 )
 
-var models = map[reflect.Type]*model{}
+// Registry 元数据注册中心的抽象
+type Registry interface {
+	// Get 查找元数据
+	Get(val any) (*Model, error)
+	// Register 注册一个模型
+	Register(val any, opts ...ModelOpt) (*Model, error)
+}
 
+// registry 基于标签和接口的实现
+// 目前来看，我们只有一个实现，所以暂时可以维持私有
 type registry struct {
 	models sync.Map
 }
 
-func (r *registry) get(val any) (*model, error) {
-	t := reflect.TypeOf(val)
-	m, ok := r.models.Load(t)
-	if !ok {
-		var err error
-		if m, err = r.parseModel(val); err != nil {
+func NewRegistry() Registry {
+	return &registry{}
+}
+
+// Get 查找元数据模型
+func (r *registry) Get(val any) (*Model, error) {
+	typ := reflect.TypeOf(val)
+	m, ok := r.models.Load(typ)
+	if ok {
+		return m.(*Model), nil
+	}
+	return r.Register(val)
+}
+
+func (r *registry) Register(val any, opts ...ModelOpt) (*Model, error) {
+	m, err := r.parseModel(val)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, opt := range opts {
+		err = opt(m)
+		if err != nil {
 			return nil, err
 		}
 	}
-	r.models.Store(t, m)
-	return m.(*model), nil
+
+	typ := reflect.TypeOf(val)
+	r.models.Store(typ, m)
+	return m, nil
 }
 
-func (r *registry) parseModel(val any) (*model, error) {
+// parseModel 支持从标签中提取自定义设置
+// 标签形式 orm:"key1=value1,key2=value2"
+func (r *registry) parseModel(val any) (*Model, error) {
 	typ := reflect.TypeOf(val)
-
 	if typ.Kind() != reflect.Ptr ||
 		typ.Elem().Kind() != reflect.Struct {
 		return nil, errs.ErrPointerOnly
@@ -45,20 +73,15 @@ func (r *registry) parseModel(val any) (*model, error) {
 		if err != nil {
 			return nil, err
 		}
-		// 有 tag 就用 tag
 		colName := tags[tagKeyColumn]
 		if colName == "" {
 			colName = underscoreName(fdType.Name)
 		}
-
 		fds[fdType.Name] = &field{
 			colName: colName,
 		}
 	}
-
-	// 获取 表名
 	var tableName string
-
 	if tn, ok := val.(TableName); ok {
 		tableName = tn.TableName()
 	}
@@ -67,7 +90,7 @@ func (r *registry) parseModel(val any) (*model, error) {
 		tableName = underscoreName(typ.Name())
 	}
 
-	return &model{
+	return &Model{
 		tableName: tableName,
 		fieldMap:  fds,
 	}, nil
@@ -111,3 +134,5 @@ func underscoreName(tableName string) string {
 	}
 	return string(buf)
 }
+
+var models = map[reflect.Type]*Model{}
