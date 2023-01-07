@@ -2,15 +2,18 @@ package orm
 
 import (
 	"fmt"
-	"reflect"
+	"github.com/gofaquan/go-http/orm/internal/errs"
 	"strings"
 )
 
 type Selector[T any] struct {
-	table string
 	sb    strings.Builder
 	args  []any
+	table string
 	where []Predicate
+	model *Model
+
+	db *DB
 }
 
 func (s *Selector[T]) From(table string) *Selector[T] {
@@ -19,11 +22,17 @@ func (s *Selector[T]) From(table string) *Selector[T] {
 }
 
 func (s *Selector[T]) Build() (*Query, error) {
+	var t T
+	var err error
+	s.model, err = s.db.r.Get(&t)
+	if err != nil {
+		return nil, err
+	}
+
 	s.sb.WriteString("SELECT * FROM ")
 	if s.table == "" {
 		s.sb.WriteByte('`')
-		var t T
-		s.sb.WriteString(reflect.TypeOf(t).Name())
+		s.sb.WriteString(s.model.tableName)
 		s.sb.WriteByte('`')
 	} else {
 		s.sb.WriteString(s.table)
@@ -36,7 +45,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 		for i := 1; i < len(s.where); i++ {
 			p = p.And(s.where[i])
 		}
-		if err := s.buildExpression(p); err != nil {
+		if err = s.buildExpression(p); err != nil {
 			return nil, err
 		}
 	}
@@ -55,8 +64,12 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 
 	switch exp := e.(type) {
 	case Column:
+		fd, ok := s.model.fieldMap[exp.name]
+		if !ok {
+			return errs.NewErrUnknownField(exp.name)
+		}
 		s.sb.WriteByte('`')
-		s.sb.WriteString(exp.name)
+		s.sb.WriteString(fd.colName)
 		s.sb.WriteByte('`')
 
 	case value:
@@ -103,6 +116,6 @@ func (s *Selector[T]) Where(ps ...Predicate) *Selector[T] {
 	s.where = ps
 	return s
 }
-func NewSelector[T any]() *Selector[T] {
-	return &Selector[T]{}
+func NewSelector[T any](db *DB) *Selector[T] {
+	return &Selector[T]{db: db}
 }
