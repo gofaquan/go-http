@@ -1,101 +1,180 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 )
 
+//var ErrorInvalidRouterPattern = errors.New("invalid router pattern")
+
 type node struct {
 	path     string
 	children []*node
-	handler  HandleFunc
+
+	// 如果这是叶子节点，
+	// 那么匹配上之后就可以调用该方法
+	handler handleFunc
 }
 
 func newNode(path string) *node {
-	return &node{path: path, children: make([]*node, 0, 2)}
+	return &node{
+		path:     path,
+		children: make([]*node, 0, 2),
+	}
 }
 
-type TreeHandler struct {
-	root *node
+type HandlerBasedOnTree struct {
+	methodTrees map[string]*node
 }
 
-func (t *TreeHandler) ServeHTTP(c *Context) {
-	// 查找 router tree
-	handler, found := t.search(c.Request.URL.Path)
-	if !found { // 不存在对于路由
+func NewHandlerBasedOnTree() Handler {
+	return &HandlerBasedOnTree{
+		methodTrees: map[string]*node{},
+	}
+}
+
+// ServeHTTP 就是从树里面找节点
+// 找到了就执行
+func (h *HandlerBasedOnTree) serve(c *Context) {
+	handler, found := h.search(c.Request.Method, c.Request.URL.Path)
+	if !found {
 		c.Writer.WriteHeader(http.StatusNotFound)
-		c.Writer.Write([]byte("未找到对于路由!"))
+		_, _ = c.Writer.Write([]byte("404 Not Found"))
 		return
 	}
 	handler(c)
 }
 
-func (t *TreeHandler) Route(method, pattern string, handleFunc HandleFunc) {
-	// 将 pattern 按照 URL 的分隔符切割
-	// 例如，/user/friends 将变成 [user, friends]
-	// 将前后的 / 去掉，统一格式
-	pattern = strings.Trim(pattern, "/")
-	paths := strings.Split(pattern, "/")
-	// 当前指向根节点
-	cur := t.root
+func (h *HandlerBasedOnTree) search(method, path string) (handleFunc, bool) {
+	root, ok := h.methodTrees[method]
+	if !ok {
+		return nil, false // 根路由都没有
+	}
 
-	for index, path := range paths {
-		child, found := t.matchChild(cur, path)
-		if found {
-			cur = child
+	if path == "/" {
+		if root.handler != nil {
+			return root.handler, true
 		} else {
-			t.buildSubTree(cur, paths[index:], handleFunc)
-			return
+			return nil, false // 根路由没有 handleFunc
 		}
 	}
-	// 离开了循环，说明我们加入的是短路径，
-	// 比如说我们先加入了 /order/detail
-	// 再加入/order，那么就会执行
-	cur.handler = handleFunc
-}
 
-func (t *TreeHandler) search(path string) (HandleFunc, bool) {
 	// 去除头尾可能有的/，然后按照/切割成段
 	paths := strings.Split(strings.Trim(path, "/"), "/")
-	cur := t.root
-	for _, path := range paths {
-		child, found := t.matchChild(cur, path)
+	for _, p := range paths {
+		// 从子节点里边找一个匹配到了当前 path 的节点
+		matchChild, found := h.matchChild(root, p)
 		if !found {
 			return nil, false
 		}
-		cur = child
+		root = matchChild
 	}
-	// 没有加入 handler 返回 false
-	if cur.handler == nil {
-		// 排除类似 /user/profile 有 handler, 而 /user 没有 handler 的场景
+	// 到这里，应该是找完了
+	if root.handler == nil {
+		// 到达这里是因为这种场景
+		// 比如说你注册了 /user/profile
+		// 然后你访问 /user
 		return nil, false
 	}
-	return cur.handler, true
+
+	return root.handler, true
 }
 
-// MatchChild 从子节点里边找一个匹配到了当前 path 的节点
-func (t *TreeHandler) matchChild(root *node, path string) (*node, bool) {
-	for _, child := range root.children {
-		if child.path == path {
-			return child, true
+// Route 就相当于往树里面插入节点
+func (h *HandlerBasedOnTree) addRoute(method string, path string,
+	handleFunc handleFunc) {
+	// 校验
+	h.validatePattern(path)
+
+	root, ok := h.methodTrees[method]
+	if !ok {
+		root = &node{path: "/"}
+		h.methodTrees[method] = root
+	}
+
+	if path == "/" {
+		if root.handler != nil {
+			panic("根路由冲突! ")
+		}
+		root.handler = handleFunc
+	}
+
+	// 将path 按照 URL 的分隔符切割
+	// 例如，/user/friends 将变成 [user, friends]
+	segs := strings.Split(path[1:], "/")
+	// 开始一段段处理
+	for _, s := range segs {
+		if s == "" {
+			panic(fmt.Sprintf("web: 非法路由。不允许使用 //a/b, /a//b 之类的路由, [%s]", path))
+		}
+		//filters = filters.childOrCreate(s)
+		// 从子节点里边找一个匹配到了当前 path 的节点
+		matchChild, found := h.matchChild(root, s)
+		if found {
+			root = matchChild
+		} else {
+			// 为当前节点根据
+			root = h.buildSubTree(root, s, handleFunc)
 		}
 	}
-	return nil, false
+
+	if root.handler != nil {
+		panic("路由冲突! ")
+	}
+
+	root.handler = handleFunc
 }
 
-// 找不到子节点就构造子树
-func (t *TreeHandler) buildSubTree(root *node, paths []string, handlerFn HandleFunc) {
+func (h *HandlerBasedOnTree) validatePattern(path string) {
+	if path == "" {
+		panic("web: 路由是空字符串")
+	}
+	if path[0] != '/' {
+		panic("web: 路由必须以 / 开头")
+	}
+
+	if path != "/" && path[len(path)-1] == '/' {
+		panic("web: 路由不能以 / 结尾")
+	}
+
+	// 校验 *，如果存在，必须在最后一个，并且它前面必须是/
+	// 即我们只接受 /* 的存在，abc*这种是非法
+	pos := strings.Index(path, "*")
+	// 找到了 *
+	if pos > 0 {
+		// 确保只能是 /*
+		if pos != len(path)-1 || path[pos-1] != '/' {
+			panic("无效路由 ! ")
+		}
+	}
+
+}
+
+func (h *HandlerBasedOnTree) matchChild(root *node, path string) (*node, bool) {
+	var wildcardNode *node
+	for _, child := range root.children {
+		// 并不是 * 的节点命中了，直接返回
+		// != * 是为了防止用户乱输入
+		if child.path == path &&
+			child.path != "*" {
+			return child, true
+		}
+		// 命中了通配符的，我们看看后面还有没有更加详细的
+		// 比如访问 /user/profile, /user/* 在前面, /user/profile 在后面, 就无法正确匹配
+		// 所以先不 return
+		if child.path == "*" {
+			wildcardNode = child
+		}
+	}
+	return wildcardNode, wildcardNode != nil
+}
+
+func (h *HandlerBasedOnTree) buildSubTree(root *node, path string, handlerFn handleFunc) *node {
 	cur := root
-	for _, path := range paths {
-		newNode := newNode(path)
-		cur.children = append(cur.children, newNode)
-		cur = newNode
-	}
-	cur.handler = handlerFn
-}
+	nn := newNode(path)
+	nn.handler = handlerFn
 
-func NewTreeHandler() *TreeHandler {
-	return &TreeHandler{
-		root: &node{},
-	}
+	cur.children = append(cur.children, nn)
+	return nn
 }
