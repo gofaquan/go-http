@@ -3,6 +3,7 @@ package orm
 import (
 	"fmt"
 	"github.com/gofaquan/go-http/orm/internal/errs"
+	model2 "github.com/gofaquan/go-http/orm/model"
 	"strings"
 )
 
@@ -11,7 +12,7 @@ type Selector[T any] struct {
 	args  []any
 	table string
 	where []Predicate
-	model *Model
+	model *model2.Model
 
 	db *DB
 }
