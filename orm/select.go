@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"context"
 	"fmt"
 	"github.com/gofaquan/go-http/orm/internal/errs"
 	model2 "github.com/gofaquan/go-http/orm/model"
@@ -33,7 +34,7 @@ func (s *Selector[T]) Build() (*Query, error) {
 	s.sb.WriteString("SELECT * FROM ")
 	if s.table == "" {
 		s.sb.WriteByte('`')
-		s.sb.WriteString(s.model.tableName)
+		s.sb.WriteString(s.model.TableName)
 		s.sb.WriteByte('`')
 	} else {
 		s.sb.WriteString(s.table)
@@ -65,12 +66,12 @@ func (s *Selector[T]) buildExpression(e Expression) error {
 
 	switch exp := e.(type) {
 	case Column:
-		fd, ok := s.model.fieldMap[exp.name]
+		fd, ok := s.model.FieldMap[exp.name]
 		if !ok {
 			return errs.NewErrUnknownField(exp.name)
 		}
 		s.sb.WriteByte('`')
-		s.sb.WriteString(fd.colName)
+		s.sb.WriteString(fd.ColName)
 		s.sb.WriteByte('`')
 
 	case value:
@@ -119,4 +120,31 @@ func (s *Selector[T]) Where(ps ...Predicate) *Selector[T] {
 }
 func NewSelector[T any](db *DB) *Selector[T] {
 	return &Selector[T]{db: db}
+}
+
+func (s *Selector[T]) Get(ctx context.Context) (*T, error) {
+	q, err := s.Build()
+	if err != nil {
+		return nil, err
+	}
+	// s.db 是我们定义的 DB
+	// s.db.db 则是 sql.DB
+	// 使用 QueryContext，从而和 GetMulti 能够复用处理结果集的代码
+	rows, err := s.db.db.QueryContext(ctx, q.SQL, q.Args...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !rows.Next() {
+		return nil, ErrNoRows
+	}
+
+	tp := new(T)
+	meta, err := s.db.r.Get(tp)
+	if err != nil {
+		return nil, err
+	}
+	val := s.db.valCreator(tp, meta)
+	err = val.SetColumns(rows)
+	return tp, err
 }
