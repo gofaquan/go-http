@@ -7,24 +7,27 @@ import (
 	"time"
 )
 
-type takeReq struct {
-	time       time.Duration
-	count      int64
-	expectWait time.Duration
+type rateLimitSuite struct {
+	suite.Suite
+	takeTests          []takeTest
+	availTests         []availTest
+	takeAvailableTests []takeAvailableTest
 }
-type takeAvailableReq struct {
-	time   time.Duration
-	count  int64
-	expect int64
-}
+
 type takeTest struct {
-	about        string
+	name         string
 	fillInterval time.Duration
 	capacity     int64
-	reqs         []takeReq
+
+	reqs []struct {
+		time       time.Duration
+		count      int64
+		expectWait time.Duration
+	}
 }
+
 type availTest struct {
-	about        string
+	name         string
 	capacity     int64
 	fillInterval time.Duration
 	take         int64
@@ -34,30 +37,30 @@ type availTest struct {
 	expectCountAfterSleep int64
 }
 type takeAvailableTest struct {
-	about        string
+	name         string
 	fillInterval time.Duration
 	capacity     int64
-	reqs         []takeAvailableReq
+	reqs         []struct {
+		time   time.Duration
+		count  int64
+		expect int64
+	}
 }
 
 func TestRateLimitMiddleware(t *testing.T) {
 	suite.Run(t, new(rateLimitSuite))
 }
 
-type rateLimitSuite struct {
-	suite.Suite
-	takeTests []takeTest
-
-	availTests         []availTest
-	takeAvailableTests []takeAvailableTest
-}
-
 func (r *rateLimitSuite) SetupSuite() {
 	r.takeTests = []takeTest{{
-		about:        "serial requests",
+		name:         "serial requests",
 		fillInterval: 250 * time.Millisecond,
 		capacity:     10,
-		reqs: []takeReq{{
+		reqs: []struct {
+			time       time.Duration
+			count      int64
+			expectWait time.Duration
+		}{{
 			time:       0,
 			count:      0,
 			expectWait: 0,
@@ -75,10 +78,14 @@ func (r *rateLimitSuite) SetupSuite() {
 			expectWait: 250 * time.Millisecond,
 		}},
 	}, {
-		about:        "concurrent requests",
+		name:         "concurrent requests",
 		fillInterval: 250 * time.Millisecond,
 		capacity:     10,
-		reqs: []takeReq{{
+		reqs: []struct {
+			time       time.Duration
+			count      int64
+			expectWait time.Duration
+		}{{
 			time:       0,
 			count:      10,
 			expectWait: 0,
@@ -96,10 +103,14 @@ func (r *rateLimitSuite) SetupSuite() {
 			expectWait: 1250 * time.Millisecond,
 		}},
 	}, {
-		about:        "more than capacity",
+		name:         "more than capacity",
 		fillInterval: 1 * time.Millisecond,
 		capacity:     10,
-		reqs: []takeReq{{
+		reqs: []struct {
+			time       time.Duration
+			count      int64
+			expectWait time.Duration
+		}{{
 			time:       0,
 			count:      10,
 			expectWait: 0,
@@ -109,10 +120,14 @@ func (r *rateLimitSuite) SetupSuite() {
 			expectWait: 5 * time.Millisecond,
 		}},
 	}, {
-		about:        "sub-quantum time",
+		name:         "sub-quantum time",
 		fillInterval: 10 * time.Millisecond,
 		capacity:     10,
-		reqs: []takeReq{{
+		reqs: []struct {
+			time       time.Duration
+			count      int64
+			expectWait time.Duration
+		}{{
 			time:       0,
 			count:      10,
 			expectWait: 0,
@@ -126,10 +141,14 @@ func (r *rateLimitSuite) SetupSuite() {
 			expectWait: 12 * time.Millisecond,
 		}},
 	}, {
-		about:        "within capacity",
+		name:         "within capacity",
 		fillInterval: 10 * time.Millisecond,
 		capacity:     5,
-		reqs: []takeReq{{
+		reqs: []struct {
+			time       time.Duration
+			count      int64
+			expectWait time.Duration
+		}{{
 			time:       0,
 			count:      5,
 			expectWait: 0,
@@ -148,7 +167,7 @@ func (r *rateLimitSuite) SetupSuite() {
 		}},
 	}}
 	r.availTests = []availTest{{
-		about:                 "should fill tokens after interval",
+		name:                  "should fill tokens after interval",
 		capacity:              5,
 		fillInterval:          time.Second,
 		take:                  5,
@@ -156,7 +175,7 @@ func (r *rateLimitSuite) SetupSuite() {
 		expectCountAfterTake:  0,
 		expectCountAfterSleep: 1,
 	}, {
-		about:                 "should fill tokens plus existing count",
+		name:                  "should fill tokens plus existing count",
 		capacity:              2,
 		fillInterval:          time.Second,
 		take:                  1,
@@ -164,7 +183,7 @@ func (r *rateLimitSuite) SetupSuite() {
 		expectCountAfterTake:  1,
 		expectCountAfterSleep: 2,
 	}, {
-		about:                 "shouldn't fill before interval",
+		name:                  "shouldn't fill before interval",
 		capacity:              2,
 		fillInterval:          2 * time.Second,
 		take:                  1,
@@ -172,7 +191,7 @@ func (r *rateLimitSuite) SetupSuite() {
 		expectCountAfterTake:  1,
 		expectCountAfterSleep: 1,
 	}, {
-		about:                 "should fill only once after 1*interval before 2*interval",
+		name:                  "should fill only once after 1*interval before 2*interval",
 		capacity:              2,
 		fillInterval:          2 * time.Second,
 		take:                  1,
@@ -181,10 +200,14 @@ func (r *rateLimitSuite) SetupSuite() {
 		expectCountAfterSleep: 2,
 	}}
 	r.takeAvailableTests = []takeAvailableTest{{
-		about:        "serial requests",
+		name:         "serial requests",
 		fillInterval: 250 * time.Millisecond,
 		capacity:     10,
-		reqs: []takeAvailableReq{{
+		reqs: []struct {
+			time   time.Duration
+			count  int64
+			expect int64
+		}{{
 			time:   0,
 			count:  0,
 			expect: 0,
@@ -202,10 +225,14 @@ func (r *rateLimitSuite) SetupSuite() {
 			expect: 1,
 		}},
 	}, {
-		about:        "concurrent requests",
+		name:         "concurrent requests",
 		fillInterval: 250 * time.Millisecond,
 		capacity:     10,
-		reqs: []takeAvailableReq{{
+		reqs: []struct {
+			time   time.Duration
+			count  int64
+			expect int64
+		}{{
 			time:   0,
 			count:  5,
 			expect: 5,
@@ -223,10 +250,14 @@ func (r *rateLimitSuite) SetupSuite() {
 			expect: 0,
 		}},
 	}, {
-		about:        "more than capacity",
+		name:         "more than capacity",
 		fillInterval: 1 * time.Millisecond,
 		capacity:     10,
-		reqs: []takeAvailableReq{{
+		reqs: []struct {
+			time   time.Duration
+			count  int64
+			expect int64
+		}{{
 			time:   0,
 			count:  10,
 			expect: 10,
@@ -236,10 +267,14 @@ func (r *rateLimitSuite) SetupSuite() {
 			expect: 10,
 		}},
 	}, {
-		about:        "within capacity",
+		name:         "within capacity",
 		fillInterval: 10 * time.Millisecond,
 		capacity:     5,
-		reqs: []takeAvailableReq{{
+		reqs: []struct {
+			time   time.Duration
+			count  int64
+			expect int64
+		}{{
 			time:   0,
 			count:  5,
 			expect: 5,
@@ -258,12 +293,14 @@ func (r *rateLimitSuite) SetupSuite() {
 func (r *rateLimitSuite) TestTake() {
 	t := r.T()
 	for i, test := range r.takeTests {
-		tb := NewBucket(test.fillInterval, test.capacity)
+		tb, err := NewBucket(test.fillInterval, test.capacity)
+		assert.Nil(t, err)
+
 		for j, req := range test.reqs {
 			d, ok := tb.take(tb.startTime.Add(req.time), req.count, infinityDuration)
 			assert.Equal(t, ok, true)
 			if d != req.expectWait {
-				t.Fatalf("test %d.%d, %s, got %v want %v", i, j, test.about, d, req.expectWait)
+				t.Fatalf("test %d.%d, %s, got %v want %v", i, j, test.name, d, req.expectWait)
 			}
 		}
 	}
@@ -272,7 +309,8 @@ func (r *rateLimitSuite) TestTake() {
 func (r *rateLimitSuite) TestTakeMaxDuration() {
 	t := r.T()
 	for i, test := range r.takeTests {
-		tb := NewBucket(test.fillInterval, test.capacity)
+		tb, err := NewBucket(test.fillInterval, test.capacity)
+		assert.Nil(t, err)
 		for j, req := range test.reqs {
 			if req.expectWait > 0 {
 				d, ok := tb.take(tb.startTime.Add(req.time), req.count, req.expectWait-1)
@@ -282,7 +320,7 @@ func (r *rateLimitSuite) TestTakeMaxDuration() {
 			d, ok := tb.take(tb.startTime.Add(req.time), req.count, req.expectWait)
 			assert.Equal(t, ok, true)
 			if d != req.expectWait {
-				t.Fatalf("test %d.%d, %s, got %v want %v", i, j, test.about, d, req.expectWait)
+				t.Fatalf("test %d.%d, %s, got %v want %v", i, j, test.name, d, req.expectWait)
 			}
 		}
 	}
@@ -291,37 +329,51 @@ func (r *rateLimitSuite) TestTakeMaxDuration() {
 func (r *rateLimitSuite) TestTakeAvailable() {
 	t := r.T()
 	for i, test := range r.takeAvailableTests {
-		tb := NewBucket(test.fillInterval, test.capacity)
+		tb, err := NewBucket(test.fillInterval, test.capacity)
+		assert.Nil(t, err)
 		for j, req := range test.reqs {
 			d := tb.takeAvailable(tb.startTime.Add(req.time), req.count)
 			if d != req.expect {
-				t.Fatalf("test %d.%d, %s, got %v want %v", i, j, test.about, d, req.expect)
+				t.Fatalf("test %d.%d, %s, got %v want %v", i, j, test.name, d, req.expect)
 			}
 		}
 	}
 }
 
-func (r *rateLimitSuite) TestPanics() {
+func (r *rateLimitSuite) TestUnexpectedErr() {
 	t := r.T()
-	assert.Panics(t, func() { NewBucket(0, 1) }, "token bucket fill interval is not > 0")
-	assert.Panics(t, func() { NewBucket(-2, 1) }, "token bucket fill interval is not > 0")
-	assert.Panics(t, func() { NewBucket(1, 0) }, "token bucket capacity is not > 0")
-	assert.Panics(t, func() { NewBucket(1, -2) }, "token bucket capacity is not > 0")
+	assert.Equal(t, func() error {
+		_, err := NewBucket(0, 1)
+		return err
+	}(), fillIntervalErr)
+	assert.Equal(t, func() error {
+		_, err := NewBucket(-2, 1)
+		return err
+	}(), fillIntervalErr)
+	assert.Equal(t, func() error {
+		_, err := NewBucket(1, 0)
+		return err
+	}(), capacityErr)
+	assert.Equal(t, func() error {
+		_, err := NewBucket(1, -2)
+		return err
+	}(), capacityErr)
 }
 
 func (r *rateLimitSuite) TestAvailable() {
 	t := r.T()
-	for i, tt := range r.availTests {
-		tb := NewBucket(tt.fillInterval, tt.capacity)
-		if c := tb.takeAvailable(tb.startTime, tt.take); c != tt.take {
-			t.Fatalf("#%d: %s, take = %d, want = %d", i, tt.about, c, tt.take)
+	for i, test := range r.availTests {
+		tb, err := NewBucket(test.fillInterval, test.capacity)
+		assert.Nil(t, err)
+		if c := tb.takeAvailable(tb.startTime, test.take); c != test.take {
+			t.Fatalf("#%d: %s, take = %d, want = %d", i, test.name, c, test.take)
 		}
-		if c := tb.available(tb.startTime); c != tt.expectCountAfterTake {
-			t.Fatalf("#%d: %s, after take, available = %d, want = %d", i, tt.about, c, tt.expectCountAfterTake)
+		if c := tb.available(tb.startTime); c != test.expectCountAfterTake {
+			t.Fatalf("#%d: %s, after take, available = %d, want = %d", i, test.name, c, test.expectCountAfterTake)
 		}
-		if c := tb.available(tb.startTime.Add(tt.sleep)); c != tt.expectCountAfterSleep {
+		if c := tb.available(tb.startTime.Add(test.sleep)); c != test.expectCountAfterSleep {
 			t.Fatalf("#%d: %s, after some time it should fill in new tokens, available = %d, want = %d",
-				i, tt.about, c, tt.expectCountAfterSleep)
+				i, test.name, c, test.expectCountAfterSleep)
 		}
 	}
 
@@ -329,7 +381,9 @@ func (r *rateLimitSuite) TestAvailable() {
 
 func (r *rateLimitSuite) TestNoBonusTokenAfterBucketIsFull() {
 	t := r.T()
-	tb := NewBucketWithQuantum(time.Second*1, 100, 20)
+	tb, err := NewBucket(time.Second*1, 100, WithQuantum(20))
+	assert.Nil(t, err)
+
 	curAvail := tb.Available()
 	if curAvail != 100 {
 		t.Fatalf("initially: actual available = %d, expected = %d", curAvail, 100)
@@ -354,7 +408,8 @@ func (r *rateLimitSuite) TestNoBonusTokenAfterBucketIsFull() {
 }
 
 func BenchmarkWait(b *testing.B) {
-	tb := NewBucket(1, 16*1024)
+	tb, _ := NewBucket(1, 16*1024)
+
 	for i := b.N - 1; i >= 0; i-- {
 		tb.Wait(1)
 	}
