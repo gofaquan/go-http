@@ -61,7 +61,7 @@ func NewBucketWithClock(fillInterval time.Duration, capacity int64, clock Clock)
 func NewBucketWithQuantum(fillInterval time.Duration, capacity, quantum int64) *Bucket {
 	return NewBucketWithQuantumAndClock(fillInterval, capacity, quantum, nil)
 }
-func NewBucketWithQuantumAndClock(fillInterval time.Duration, quantum, capacity int64, clock Clock) *Bucket {
+func NewBucketWithQuantumAndClock(fillInterval time.Duration, capacity, quantum int64, clock Clock) *Bucket {
 	if clock == nil {
 		clock = c{}
 	}
@@ -136,6 +136,7 @@ func (b *Bucket) take(now time.Time, count int64, maxWait time.Duration) (time.D
 	avail := b.availableTokens - count
 	// 获取成功，直接返回
 	if avail >= 0 {
+		b.availableTokens = avail
 		return 0, true
 	}
 
