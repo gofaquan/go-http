@@ -2,6 +2,7 @@ package orm
 
 import (
 	"github.com/gofaquan/go-http/orm/internal/errs"
+	"github.com/gofaquan/go-http/orm/model"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -20,7 +21,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// From 都不调用
 			name: "no from",
-			q:    NewSelector[TestModel](db),
+			q:    NewSelector[model.TestModel](db),
 			wantQuery: &Query{
 				SQL: "SELECT * FROM `test_model`;",
 			},
@@ -28,7 +29,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 调用 FROM
 			name: "with from",
-			q:    NewSelector[TestModel](db).From("`test_model_t`"),
+			q:    NewSelector[model.TestModel](db).From("`test_model_t`"),
 			wantQuery: &Query{
 				SQL: "SELECT * FROM `test_model_t`;",
 			},
@@ -36,7 +37,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 调用 FROM，但是传入空字符串
 			name: "empty from",
-			q:    NewSelector[TestModel](db).From(""),
+			q:    NewSelector[model.TestModel](db).From(""),
 			wantQuery: &Query{
 				SQL: "SELECT * FROM `test_model`;",
 			},
@@ -44,7 +45,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 调用 FROM，同时出入看了 DB
 			name: "with db",
-			q:    NewSelector[TestModel](db).From("`test_db`.`test_model`"),
+			q:    NewSelector[model.TestModel](db).From("`test_db`.`test_model`"),
 			wantQuery: &Query{
 				SQL: "SELECT * FROM `test_db`.`test_model`;",
 			},
@@ -52,7 +53,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 单一简单条件
 			name: "single and simple predicate",
-			q: NewSelector[TestModel](db).From("`test_model_t`").
+			q: NewSelector[model.TestModel](db).From("`test_model_t`").
 				Where(C("Id").EQ(1)),
 			wantQuery: &Query{
 				SQL:  "SELECT * FROM `test_model_t` WHERE `id` = ?;",
@@ -62,7 +63,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 多个 predicate
 			name: "multiple predicates",
-			q: NewSelector[TestModel](db).
+			q: NewSelector[model.TestModel](db).
 				Where(C("Age").GT(18), C("Age").LT(35)),
 			wantQuery: &Query{
 				SQL:  "SELECT * FROM `test_model` WHERE (`age` > ?) AND (`age` < ?);",
@@ -72,7 +73,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 使用 AND
 			name: "and",
-			q: NewSelector[TestModel](db).
+			q: NewSelector[model.TestModel](db).
 				Where(C("Age").GT(18).And(C("Age").LT(35))),
 			wantQuery: &Query{
 				SQL:  "SELECT * FROM `test_model` WHERE (`age` > ?) AND (`age` < ?);",
@@ -82,7 +83,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 使用 OR
 			name: "or",
-			q: NewSelector[TestModel](db).
+			q: NewSelector[model.TestModel](db).
 				Where(C("Age").GT(18).OR(C("Age").LT(35))),
 			wantQuery: &Query{
 				SQL:  "SELECT * FROM `test_model` WHERE (`age` > ?) OR (`age` < ?);",
@@ -92,7 +93,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 使用 NOT
 			name: "not",
-			q:    NewSelector[TestModel](db).Where(Not(C("Age").GT(18))),
+			q:    NewSelector[model.TestModel](db).Where(Not(C("Age").GT(18))),
 			wantQuery: &Query{
 				// NOT 前面有两个空格，因为我们没有对 NOT 进行特殊处理
 				SQL:  "SELECT * FROM `test_model` WHERE  NOT (`age` > ?);",
@@ -102,7 +103,7 @@ func TestSelector_Build(t *testing.T) {
 		{
 			// 非法列
 			name:    "invalid column",
-			q:       NewSelector[TestModel](db).Where(Not(C("Invalid").GT(18))),
+			q:       NewSelector[model.TestModel](db).Where(Not(C("Invalid").GT(18))),
 			wantErr: errs.NewErrUnknownField("Invalid"),
 		},
 	}

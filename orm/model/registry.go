@@ -1,4 +1,4 @@
-package orm
+package model
 
 import (
 	"github.com/gofaquan/go-http/orm/internal/errs"
@@ -8,12 +8,14 @@ import (
 	"unicode"
 )
 
+type Option func(m *Model) error
+
 // Registry 元数据注册中心的抽象
 type Registry interface {
 	// Get 查找元数据
 	Get(val any) (*Model, error)
 	// Register 注册一个模型
-	Register(val any, opts ...ModelOpt) (*Model, error)
+	Register(val any, opts ...Option) (*Model, error)
 }
 
 // registry 基于标签和接口的实现
@@ -36,7 +38,7 @@ func (r *registry) Get(val any) (*Model, error) {
 	return r.Register(val)
 }
 
-func (r *registry) Register(val any, opts ...ModelOpt) (*Model, error) {
+func (r *registry) Register(val any, opts ...Option) (*Model, error) {
 	m, err := r.parseModel(val)
 	if err != nil {
 		return nil, err
@@ -66,7 +68,7 @@ func (r *registry) parseModel(val any) (*Model, error) {
 
 	// 获得字段的数量
 	numField := typ.NumField()
-	fds := make(map[string]*field, numField)
+	fds := make(map[string]*Field, numField)
 	for i := 0; i < numField; i++ {
 		fdType := typ.Field(i)
 		tags, err := r.parseTag(fdType.Tag)
@@ -77,8 +79,8 @@ func (r *registry) parseModel(val any) (*Model, error) {
 		if colName == "" {
 			colName = underscoreName(fdType.Name)
 		}
-		fds[fdType.Name] = &field{
-			colName: colName,
+		fds[fdType.Name] = &Field{
+			ColName: colName,
 		}
 	}
 	var tableName string
@@ -91,8 +93,8 @@ func (r *registry) parseModel(val any) (*Model, error) {
 	}
 
 	return &Model{
-		tableName: tableName,
-		fieldMap:  fds,
+		TableName: tableName,
+		FieldMap:  fds,
 	}, nil
 }
 
@@ -135,4 +137,25 @@ func underscoreName(tableName string) string {
 	return string(buf)
 }
 
-var models = map[reflect.Type]*Model{}
+//var models = map[reflect.Type]*Model{}
+
+func WithTableName(tableName string) Option {
+	return func(model *Model) error {
+		model.TableName = tableName
+		return nil
+	}
+}
+
+func WithColumnName(field string, columnName string) Option {
+	return func(model *Model) error {
+		fd, ok := model.FieldMap[field]
+		if !ok {
+			return errs.NewErrUnknownField(field)
+		}
+		// 注意，这里我们根本没有检测 ColName 会不会是空字符串
+		// 因为正常情况下，用户都不会写错
+		// 即便写错了，也很容易在测试中发现
+		fd.ColName = columnName
+		return nil
+	}
+}
