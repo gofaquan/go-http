@@ -14,8 +14,8 @@ var (
 	quantumErr      = errors.New("令牌桶填充量需要大于 0 ")
 )
 
-// tokenBucket 令牌桶
-type tokenBucket struct {
+// TokenBucket 令牌桶
+type TokenBucket struct {
 	// startTime 保存存储桶首次创建并开始滴答的时刻。
 	startTime time.Time
 
@@ -37,16 +37,16 @@ type tokenBucket struct {
 	// 上次填充的时间戳
 	latestTick int64
 }
-type tbOption func(bucket *tokenBucket)
+type TbOption func(bucket *TokenBucket)
 
-func WithQuantum(quantum int64) tbOption {
-	return func(bucket *tokenBucket) {
+func WithQuantum(quantum int64) TbOption {
+	return func(bucket *TokenBucket) {
 		bucket.quantum = quantum
 	}
 }
 
-func NewBucket(fillInterval time.Duration, capacity int64, opts ...tbOption) (*tokenBucket, error) {
-	tb := &tokenBucket{
+func NewBucket(fillInterval time.Duration, capacity int64, opts ...TbOption) (*TokenBucket, error) {
+	tb := &TokenBucket{
 		startTime:       time.Now(),
 		capacity:        capacity,
 		quantum:         1,
@@ -68,7 +68,7 @@ func NewBucket(fillInterval time.Duration, capacity int64, opts ...tbOption) (*t
 }
 
 // 获取现在的间隔数
-func (tb *tokenBucket) check() error {
+func (tb *TokenBucket) check() error {
 	if tb.fillInterval <= 0 {
 		return fillIntervalErr
 	}
@@ -82,12 +82,12 @@ func (tb *tokenBucket) check() error {
 }
 
 // 获取现在的间隔数
-func (tb *tokenBucket) currentTick(now time.Time) int64 {
+func (tb *TokenBucket) currentTick(now time.Time) int64 {
 	return int64(now.Sub(tb.startTime) / tb.fillInterval)
 }
 
 // 根据过去的间隔来更新令牌数
-func (tb *tokenBucket) adjustAvailableTokens(tick int64) {
+func (tb *TokenBucket) adjustAvailableTokens(tick int64) {
 	latestTick := tb.latestTick
 	tb.latestTick = tick
 	if tb.availableTokens >= tb.capacity {
@@ -103,7 +103,7 @@ func (tb *tokenBucket) adjustAvailableTokens(tick int64) {
 }
 
 // WaitMaxDuration 等待一段时间拿令牌，拿不到就返回 false
-func (tb *tokenBucket) WaitMaxDuration(count int64, maxWait time.Duration) bool {
+func (tb *TokenBucket) WaitMaxDuration(count int64, maxWait time.Duration) bool {
 	d, ok := tb.TakeMaxDuration(count, maxWait)
 	// 其实只有在 这段时间内可以拿到对应数目的令牌才会 sleep
 	if d > 0 {
@@ -113,12 +113,12 @@ func (tb *tokenBucket) WaitMaxDuration(count int64, maxWait time.Duration) bool 
 }
 
 // TakeMaxDuration 返回 能拿到的话需要的时间 和 是否能拿到
-func (tb *tokenBucket) TakeMaxDuration(count int64, maxWait time.Duration) (time.Duration, bool) {
+func (tb *TokenBucket) TakeMaxDuration(count int64, maxWait time.Duration) (time.Duration, bool) {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	return tb.take(time.Now(), count, maxWait)
 }
-func (tb *tokenBucket) take(now time.Time, count int64, maxWait time.Duration) (time.Duration, bool) {
+func (tb *TokenBucket) take(now time.Time, count int64, maxWait time.Duration) (time.Duration, bool) {
 	if count <= 0 {
 		return 0, true
 	}
@@ -148,14 +148,14 @@ func (tb *tokenBucket) take(now time.Time, count int64, maxWait time.Duration) (
 }
 
 // Wait 一直等待到可用
-func (tb *tokenBucket) Wait(count int64) {
+func (tb *TokenBucket) Wait(count int64) {
 	if d := tb.Take(count); d > 0 {
 		time.Sleep(d)
 	}
 }
 
 // Take 返回拿 count 个需要的时间
-func (tb *tokenBucket) Take(count int64) time.Duration {
+func (tb *TokenBucket) Take(count int64) time.Duration {
 	tb.mu.Lock()
 	tb.mu.Unlock()
 	d, _ := tb.take(time.Now(), count, infinityDuration)
@@ -163,7 +163,7 @@ func (tb *tokenBucket) Take(count int64) time.Duration {
 }
 
 // 有多少拿多少
-func (tb *tokenBucket) takeAvailable(now time.Time, count int64) int64 {
+func (tb *TokenBucket) takeAvailable(now time.Time, count int64) int64 {
 	if count <= 0 {
 		return 0
 	}
@@ -180,17 +180,17 @@ func (tb *tokenBucket) takeAvailable(now time.Time, count int64) int64 {
 	return count
 }
 
-func (tb *tokenBucket) TakeAvailable(count int64) int64 {
+func (tb *TokenBucket) TakeAvailable(count int64) int64 {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	return tb.takeAvailable(time.Now(), count)
 }
 
 // Available 查看有多少可以拿
-func (tb *tokenBucket) Available() int64 {
+func (tb *TokenBucket) Available() int64 {
 	return tb.available(time.Now())
 }
-func (tb *tokenBucket) available(now time.Time) int64 {
+func (tb *TokenBucket) available(now time.Time) int64 {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	tb.adjustAvailableTokens(tb.currentTick(now))

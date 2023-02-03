@@ -455,6 +455,7 @@ func Test_findRoute_Middleware(t *testing.T) {
 		return func(next HandleFunc) HandleFunc {
 			return func(ctx *Context) {
 				ctx.ResponseData = append(ctx.ResponseData, i)
+				//ctx.ResponseData = append(ctx.ResponseData, []byte{i,1}...)
 				next(ctx)
 			}
 		}
@@ -509,6 +510,7 @@ func Test_findRoute_Middleware(t *testing.T) {
 	for _, mdlRoute := range mdlsRoute {
 		r.addRoute(mdlRoute.method, mdlRoute.path, nil, mdlRoute.mdls...)
 	}
+
 	testCases := []struct {
 		name   string
 		method string
@@ -517,9 +519,10 @@ func Test_findRoute_Middleware(t *testing.T) {
 		wantResp string
 	}{
 		{
-			name:   "static, not match",
-			method: http.MethodGet,
-			path:   "/a",
+			name:     "static, not match",
+			method:   http.MethodGet,
+			path:     "/a",
+			wantResp: "",
 		},
 		{
 			name:     "static, match",

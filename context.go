@@ -39,6 +39,10 @@ type StringVal struct {
 }
 
 func (c *Context) FormValue(key string) StringVal {
+	if err := c.Request.ParseMultipartForm(1024); err != nil {
+		return StringVal{err: err}
+	}
+
 	if err := c.Request.ParseForm(); err != nil {
 		return StringVal{err: err}
 	}

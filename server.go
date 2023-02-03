@@ -43,23 +43,23 @@ func (h *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPServer) serve(ctx *Context) {
-	route, ok := h.findRoute(ctx.Request.Method, ctx.Request.URL.Path)
-	if route.n != nil {
-		ctx.PathParams = route.pathParams
-		ctx.MatchedRoute = route.n.route
+	target, ok := h.findRoute(ctx.Request.Method, ctx.Request.URL.Path)
+	if target.n != nil {
+		ctx.PathParams = target.pathParams
+		ctx.MatchedRoute = target.n.route
 	}
 
 	var root HandleFunc = func(ctx *Context) {
-		if !ok || route.n == nil || route.n.handler == nil {
+		if !ok || target.n == nil || target.n.handler == nil {
 			ctx.StatusCode = 404
 			ctx.ResponseData = []byte("404 NOT FOUND")
 			return
 		}
-		route.n.handler(ctx)
+		target.n.handler(ctx)
 	}
 
-	for i := len(route.mdls) - 1; i >= 0; i-- {
-		root = route.mdls[i](root)
+	for i := len(target.mdls) - 1; i >= 0; i-- {
+		root = target.mdls[i](root)
 	}
 
 	var m Middleware = func(next HandleFunc) HandleFunc {
