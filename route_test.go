@@ -37,7 +37,7 @@ func Test_router_AddRoute(t *testing.T) {
 			method: http.MethodPost,
 			path:   "/login",
 		},
-		// 通配符 * 测试用例
+		// 通配符测试用例
 		{
 			method: http.MethodGet,
 			path:   "/order/*",
@@ -129,67 +129,67 @@ func Test_router_AddRoute(t *testing.T) {
 	r = newRouter()
 
 	// 空字符串
-	assert.PanicsWithValue(t, "http: 路由是空字符串", func() {
+	assert.PanicsWithValue(t, "web: 路由是空字符串", func() {
 		r.addRoute(http.MethodGet, "", mockHandler)
 	})
 
 	// 前导没有 /
-	assert.PanicsWithValue(t, "http: 路由必须以 / 开头", func() {
+	assert.PanicsWithValue(t, "web: 路由必须以 / 开头", func() {
 		r.addRoute(http.MethodGet, "a/b/c", mockHandler)
 	})
 
 	// 后缀有 /
-	assert.PanicsWithValue(t, "http: 路由不能以 / 结尾", func() {
+	assert.PanicsWithValue(t, "web: 路由不能以 / 结尾", func() {
 		r.addRoute(http.MethodGet, "/a/b/c/", mockHandler)
 	})
 
 	// 根节点重复注册
 	r.addRoute(http.MethodGet, "/", mockHandler)
-	assert.PanicsWithValue(t, "http: 路由冲突[/]", func() {
+	assert.PanicsWithValue(t, "web: 路由冲突[/]", func() {
 		r.addRoute(http.MethodGet, "/", mockHandler)
 	})
 	// 普通节点重复注册
 	r.addRoute(http.MethodGet, "/a/b/c", mockHandler)
-	assert.PanicsWithValue(t, "http: 路由冲突[/a/b/c]", func() {
+	assert.PanicsWithValue(t, "web: 路由冲突[/a/b/c]", func() {
 		r.addRoute(http.MethodGet, "/a/b/c", mockHandler)
 	})
 
 	// 多个 /
-	assert.PanicsWithValue(t, "http: 非法路由。不允许使用 //a/b, /a//b 之类的路由, [/a//b]", func() {
+	assert.PanicsWithValue(t, "web: 非法路由。不允许使用 //a/b, /a//b 之类的路由, [/a//b]", func() {
 		r.addRoute(http.MethodGet, "/a//b", mockHandler)
 	})
-	assert.PanicsWithValue(t, "http: 非法路由。不允许使用 //a/b, /a//b 之类的路由, [//a/b]", func() {
+	assert.PanicsWithValue(t, "web: 非法路由。不允许使用 //a/b, /a//b 之类的路由, [//a/b]", func() {
 		r.addRoute(http.MethodGet, "//a/b", mockHandler)
 	})
 
 	// 同时注册通配符路由和参数路由
-	assert.PanicsWithValue(t, "http: 非法路由，已有通配符路由。不允许同时注册通配符路由和参数路由 [:id]", func() {
+	assert.PanicsWithValue(t, "web: 非法路由，已有通配符路由。不允许同时注册通配符路由和参数路由 [:id]", func() {
 		r.addRoute(http.MethodGet, "/a/*", mockHandler)
 		r.addRoute(http.MethodGet, "/a/:id", mockHandler)
 	})
-	assert.PanicsWithValue(t, "http: 非法路由，已有路径参数路由。不允许同时注册通配符路由和参数路由 [*]", func() {
+	assert.PanicsWithValue(t, "web: 非法路由，已有路径参数路由。不允许同时注册通配符路由和参数路由 [*]", func() {
 		r.addRoute(http.MethodGet, "/a/b/:id", mockHandler)
 		r.addRoute(http.MethodGet, "/a/b/*", mockHandler)
 	})
 	r = newRouter()
-	assert.PanicsWithValue(t, "http: 非法路由，已有通配符路由。不允许同时注册通配符路由和参数路由 [:id]", func() {
+	assert.PanicsWithValue(t, "web: 非法路由，已有通配符路由。不允许同时注册通配符路由和参数路由 [:id]", func() {
 		r.addRoute(http.MethodGet, "/*", mockHandler)
 		r.addRoute(http.MethodGet, "/:id", mockHandler)
 	})
 	r = newRouter()
-	assert.PanicsWithValue(t, "http: 非法路由，已有路径参数路由。不允许同时注册通配符路由和参数路由 [*]", func() {
+	assert.PanicsWithValue(t, "web: 非法路由，已有路径参数路由。不允许同时注册通配符路由和参数路由 [*]", func() {
 		r.addRoute(http.MethodGet, "/:id", mockHandler)
 		r.addRoute(http.MethodGet, "/*", mockHandler)
 	})
 
 	// 参数冲突
-	assert.PanicsWithValue(t, "http: 路由冲突，参数路由冲突，已有 :id，新注册 :name", func() {
+	assert.PanicsWithValue(t, "web: 路由冲突，参数路由冲突，已有 :id，新注册 :name", func() {
 		r.addRoute(http.MethodGet, "/a/b/c/:id", mockHandler)
 		r.addRoute(http.MethodGet, "/a/b/c/:name", mockHandler)
 	})
 }
 
-func (r *router) equal(y router) (string, bool) {
+func (r router) equal(y router) (string, bool) {
 	for k, v := range r.trees {
 		yv, ok := y.trees[k]
 		if !ok {
@@ -448,4 +448,133 @@ func Test_router_findRoute(t *testing.T) {
 			assert.Equal(t, wantVal, nVal)
 		})
 	}
+}
+
+func Test_findRoute_Middleware(t *testing.T) {
+	var mdlBuilder = func(i byte) Middleware {
+		return func(next HandleFunc) HandleFunc {
+			return func(ctx *Context) {
+				ctx.ResponseData = append(ctx.ResponseData, i)
+				next(ctx)
+			}
+		}
+	}
+	mdlsRoute := []struct {
+		method string
+		path   string
+		mdls   []Middleware
+	}{
+		{
+			method: http.MethodGet,
+			path:   "/a/b",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('b')},
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a/*",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('*')},
+		},
+		{
+			method: http.MethodGet,
+			path:   "/a/b/*",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('*')},
+		},
+		{
+			method: http.MethodPost,
+			path:   "/a/b/*",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('*')},
+		},
+		{
+			method: http.MethodPost,
+			path:   "/a/*/c",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('*'), mdlBuilder('c')},
+		},
+		{
+			method: http.MethodPost,
+			path:   "/a/b/c",
+			mdls:   []Middleware{mdlBuilder('a'), mdlBuilder('b'), mdlBuilder('c')},
+		},
+		{
+			method: http.MethodDelete,
+			path:   "/*",
+			mdls:   []Middleware{mdlBuilder('*')},
+		},
+		{
+			method: http.MethodDelete,
+			path:   "/",
+			mdls:   []Middleware{mdlBuilder('/')},
+		},
+	}
+	r := newRouter()
+	for _, mdlRoute := range mdlsRoute {
+		r.addRoute(mdlRoute.method, mdlRoute.path, nil, mdlRoute.mdls...)
+	}
+	testCases := []struct {
+		name   string
+		method string
+		path   string
+		// 我们借助 ctx 里面的 RespData 字段来判断 middleware 有没有按照预期执行
+		wantResp string
+	}{
+		{
+			name:   "static, not match",
+			method: http.MethodGet,
+			path:   "/a",
+		},
+		{
+			name:     "static, match",
+			method:   http.MethodGet,
+			path:     "/a/c",
+			wantResp: "a*",
+		},
+		{
+			name:     "static and star",
+			method:   http.MethodGet,
+			path:     "/a/b",
+			wantResp: "a*ab",
+		},
+		{
+			name:     "static and star",
+			method:   http.MethodGet,
+			path:     "/a/b/c",
+			wantResp: "a*abab*",
+		},
+		{
+			name:     "abc",
+			method:   http.MethodPost,
+			path:     "/a/b/c",
+			wantResp: "a*cab*abc",
+		},
+		{
+			name:     "root",
+			method:   http.MethodDelete,
+			path:     "/",
+			wantResp: "/",
+		},
+		{
+			name:     "root star",
+			method:   http.MethodDelete,
+			path:     "/a",
+			wantResp: "/*",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mi, _ := r.findRoute(tc.method, tc.path)
+			mdls := mi.mdls
+			var root HandleFunc = func(ctx *Context) {
+				// 使用 string 可读性比较高
+				assert.Equal(t, tc.wantResp, string(ctx.ResponseData))
+			}
+			for i := len(mdls) - 1; i >= 0; i-- {
+				root = mdls[i](root)
+			}
+			// 开始调度
+			root(&Context{
+				ResponseData: make([]byte, 0, len(tc.wantResp)),
+			})
+		})
+	}
+
 }

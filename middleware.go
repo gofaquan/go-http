@@ -1,3 +1,3 @@
 package main
 
-type Middleware func(next ...HandleFunc) HandleFunc
+type Middleware func(next HandleFunc) HandleFunc
