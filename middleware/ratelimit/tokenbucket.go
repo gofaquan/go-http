@@ -9,9 +9,9 @@ import (
 const infinityDuration time.Duration = 0x7fffffffffffffff
 
 var (
-	fillIntervalErr = errors.New("token bucket fill interval is not > 0")
-	capacityErr     = errors.New("token bucket capacity is not > 0")
-	quantumErr      = errors.New("token bucket quantum is not > 0")
+	fillIntervalErr = errors.New("令牌桶填充间隔需要大于 0 ")
+	capacityErr     = errors.New("令牌桶容量需要大于 0 ")
+	quantumErr      = errors.New("令牌桶填充量需要大于 0 ")
 )
 
 // tokenBucket 令牌桶
@@ -28,7 +28,6 @@ type tokenBucket struct {
 	// 填充的间隔
 	fillInterval time.Duration
 
-	// mu guards the fields below it.
 	// 保证下面两个字段的并发安全
 	mu sync.Mutex
 
@@ -106,10 +105,9 @@ func (tb *tokenBucket) adjustAvailableTokens(tick int64) {
 // WaitMaxDuration 等待一段时间拿令牌，拿不到就返回 false
 func (tb *tokenBucket) WaitMaxDuration(count int64, maxWait time.Duration) bool {
 	d, ok := tb.TakeMaxDuration(count, maxWait)
-	// 根据 take 的代码推出，其实只有在 这段时间内可以拿到对应数目的令牌才会 sleep
+	// 其实只有在 这段时间内可以拿到对应数目的令牌才会 sleep
 	if d > 0 {
 		time.Sleep(d)
-		//tb.clock.Sleep(d)
 	}
 	return ok
 }
@@ -119,8 +117,6 @@ func (tb *tokenBucket) TakeMaxDuration(count int64, maxWait time.Duration) (time
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	return tb.take(time.Now(), count, maxWait)
-	//return tb.take(tb.clock.Now(), count, maxWait)
-	////return tb.take(tb.clock.Now(), count, maxWait)
 }
 func (tb *tokenBucket) take(now time.Time, count int64, maxWait time.Duration) (time.Duration, bool) {
 	if count <= 0 {
@@ -155,7 +151,6 @@ func (tb *tokenBucket) take(now time.Time, count int64, maxWait time.Duration) (
 func (tb *tokenBucket) Wait(count int64) {
 	if d := tb.Take(count); d > 0 {
 		time.Sleep(d)
-		//tb.clock.Sleep(d)
 	}
 }
 
@@ -164,7 +159,6 @@ func (tb *tokenBucket) Take(count int64) time.Duration {
 	tb.mu.Lock()
 	tb.mu.Unlock()
 	d, _ := tb.take(time.Now(), count, infinityDuration)
-	//d, _ := tb.take(tb.clock.Now(), count, infinityDuration)
 	return d
 }
 
@@ -190,13 +184,11 @@ func (tb *tokenBucket) TakeAvailable(count int64) int64 {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	return tb.takeAvailable(time.Now(), count)
-	//return tb.takeAvailable(tb.clock.Now(), count)
 }
 
 // Available 查看有多少可以拿
 func (tb *tokenBucket) Available() int64 {
 	return tb.available(time.Now())
-	//return tb.available(tb.clock.Now())
 }
 func (tb *tokenBucket) available(now time.Time) int64 {
 	tb.mu.Lock()

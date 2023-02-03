@@ -1,81 +1,112 @@
 package main
 
 import (
-	"context"
-	"fmt"
+	"log"
+	"net"
 	"net/http"
-	"time"
+	"strconv"
 )
 
-// Server 定义 http Server 的顶级抽象
 type Server interface {
+	http.Handler
 	Start(address string) error
-	Shutdown(ctx context.Context) error
-	Routable
+	addRoute(method, path string, handler HandleFunc, ms ...Middleware)
 }
 
-// Routable 可路由的
-type Routable interface {
-	// Route 设定一个路由，命中该路由的会执行 handleFunc 的代码
-	addRoute(method, pattern string, handleFunc handleFunc)
+type HTTPServer struct {
+	router
+	log *log.Logger
 }
 
-// sdkHttpServer 这个是基于 net/http 这个包实现的 http server
-type sdkHttpServer struct {
-	// Name server 的名字，给个标记，日志输出的时候用得上
-	Name    string
-	handler Handler
-	root    Filter
-}
+type ServerOption func(server *HTTPServer)
 
-func (s *sdkHttpServer) addRoute(method string, pattern string,
-	handlerFunc handleFunc) {
-	s.handler.addRoute(method, pattern, handlerFunc)
-}
-
-func (s *sdkHttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := NewContext(w, r)
-	s.root(c)
-}
-func (s *sdkHttpServer) Start(address string) error {
-
-	return http.ListenAndServe(address, s)
-	//return http.ListenAndServe(address, s.handler)
-}
-func (s *sdkHttpServer) Shutdown(ctx context.Context) error {
-	// sleep 一下来模拟这个过程
-	fmt.Printf("%s shutdown...\n", s.Name)
-	time.Sleep(time.Second)
-	fmt.Printf("%s shutdown!!!\n", s.Name)
-	return nil
-}
-func NewSdkHttpServer(name string, builders ...FilterBuilder) *sdkHttpServer {
-	handler := NewHandlerBasedOnTree()
-	var root Filter = handler.serve
-	for i := len(builders) - 1; i >= 0; i-- {
-		b := builders[i]
-		root = b(root)
+func NewHTTPServer(opts ...ServerOption) *HTTPServer {
+	s := &HTTPServer{
+		router: newRouter(),
+		log:    log.Default(),
 	}
 
-	res := &sdkHttpServer{
-		Name:    name,
-		handler: handler,
-		root:    root,
+	for _, opt := range opts {
+		opt(s)
 	}
-	return res
+
+	return s
 }
 
-func (s *sdkHttpServer) Get(path string, handler handleFunc) {
-	s.handler.addRoute(http.MethodGet, path, handler)
+func (h *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := &Context{
+		Request:        r,
+		ResponseWriter: w,
+	}
+
+	h.serve(ctx)
 }
 
-func (s *sdkHttpServer) Post(path string, handler handleFunc) {
-	s.handler.addRoute(http.MethodPost, path, handler)
+func (h *HTTPServer) serve(ctx *Context) {
+	route, ok := h.findRoute(ctx.Request.Method, ctx.Request.URL.Path)
+	if route.n != nil {
+		ctx.PathParams = route.pathParams
+		ctx.MatchedRoute = route.n.route
+	}
+
+	var root HandleFunc = func(ctx *Context) {
+		if !ok || route.n == nil || route.n.handler == nil {
+			ctx.StatusCode = 404
+			ctx.ResponseData = []byte("404 NOT FOUND")
+			return
+		}
+		route.n.handler(ctx)
+	}
+
+	for i := len(route.mdls) - 1; i >= 0; i-- {
+		root = route.mdls[i](root)
+	}
+
+	var m Middleware = func(next HandleFunc) HandleFunc {
+		return func(ctx *Context) {
+			next(ctx)
+			h.flushResponse(ctx)
+		}
+	}
+	root = m(root)
+	root(ctx)
 }
 
-func (s *sdkHttpServer) Delete(path string, handler handleFunc) {
-	s.handler.addRoute(http.MethodDelete, path, handler)
+func (h *HTTPServer) flushResponse(ctx *Context) {
+	if ctx.StatusCode > 0 {
+		ctx.ResponseWriter.WriteHeader(ctx.StatusCode)
+	}
+	ctx.ResponseWriter.Header().Set("Content-Length", strconv.Itoa(len(ctx.ResponseData)))
+	_, err := ctx.ResponseWriter.Write(ctx.ResponseData)
+	if err != nil {
+		h.log.Fatalln("回写响应失败", err)
+	}
 }
-func (s *sdkHttpServer) PUT(path string, handler handleFunc) {
-	s.handler.addRoute(http.MethodPut, path, handler)
+
+func (h *HTTPServer) Start(addr string) error {
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	return http.Serve(l, h)
+	//return http.ListenAndServe(addr, h)
+}
+
+func (h *HTTPServer) Get(path string, handleFunc HandleFunc) {
+	h.addRoute(http.MethodGet, path, handleFunc)
+}
+
+func (h *HTTPServer) Post(path string, handleFunc HandleFunc) {
+	h.addRoute(http.MethodPost, path, handleFunc)
+}
+func (h *HTTPServer) Delete(path string, handleFunc HandleFunc) {
+	h.addRoute(http.MethodDelete, path, handleFunc)
+}
+
+func (h *HTTPServer) PUT(path string, handleFunc HandleFunc) {
+	h.addRoute(http.MethodPut, path, handleFunc)
+}
+func (h *HTTPServer) Options(path string, handleFunc HandleFunc) {
+	h.addRoute(http.MethodOptions, path, handleFunc)
 }

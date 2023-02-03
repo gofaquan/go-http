@@ -358,6 +358,15 @@ func (r *rateLimitSuite) TestUnexpectedErr() {
 		_, err := NewBucket(1, -2)
 		return err
 	}(), capacityErr)
+
+	assert.Equal(t, func() error {
+		_, err := NewBucket(1, 1, WithQuantum(0))
+		return err
+	}(), quantumErr)
+	assert.Equal(t, func() error {
+		_, err := NewBucket(1, 1, WithQuantum(-2))
+		return err
+	}(), quantumErr)
 }
 
 func (r *rateLimitSuite) TestAvailable() {
