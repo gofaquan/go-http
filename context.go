@@ -21,6 +21,8 @@ type Context struct {
 	cacheQueryValues url.Values
 }
 
+type HandleFunc func(ctx *Context)
+
 func (c *Context) BindJSON(val any) error {
 	if c.Request.Body == nil {
 		return errors.New("request body 为 nil")
