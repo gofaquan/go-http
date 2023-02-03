@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+
 	"net/http"
 	"time"
 )
@@ -20,62 +21,62 @@ type Routable interface {
 	addRoute(method, pattern string, handleFunc handleFunc)
 }
 
-// sdkHttpServer 这个是基于 net/http 这个包实现的 http server
-type sdkHttpServer struct {
+// SdkHttpServer 这个是基于 net/http 这个包实现的 http server
+type SdkHttpServer struct {
 	// Name server 的名字，给个标记，日志输出的时候用得上
 	Name    string
 	handler Handler
 	root    Filter
 }
 
-func (s *sdkHttpServer) addRoute(method string, pattern string,
+func (s *SdkHttpServer) addRoute(method string, pattern string,
 	handlerFunc handleFunc) {
 	s.handler.addRoute(method, pattern, handlerFunc)
 }
 
-func (s *sdkHttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := NewContext(w, r)
-	s.root(c)
+func (s *SdkHttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	c := NewContext(w, r) // 新建 context 处理 http 请求
+	s.root(c)             // 中间件调用
 }
-func (s *sdkHttpServer) Start(address string) error {
 
+func (s *SdkHttpServer) Start(address string) error {
 	return http.ListenAndServe(address, s)
-	//return http.ListenAndServe(address, s.handler)
 }
-func (s *sdkHttpServer) Shutdown(ctx context.Context) error {
-	// sleep 一下来模拟这个过程
+
+func (s *SdkHttpServer) Shutdown(ctx context.Context) error {
 	fmt.Printf("%s shutdown...\n", s.Name)
 	time.Sleep(time.Second)
 	fmt.Printf("%s shutdown!!!\n", s.Name)
 	return nil
 }
-func NewSdkHttpServer(name string, builders ...FilterBuilder) *sdkHttpServer {
+
+func NewSdkHttpServer(name string, builders ...FilterBuilder) *SdkHttpServer {
 	handler := NewHandlerBasedOnTree()
-	var root Filter = handler.serve
+	var root Filter = handler.serve // 最外面的中间就执行路由的 func
+	// 反着加入责任链
 	for i := len(builders) - 1; i >= 0; i-- {
 		b := builders[i]
 		root = b(root)
 	}
 
-	res := &sdkHttpServer{
+	res := &SdkHttpServer{
 		Name:    name,
 		handler: handler,
 		root:    root,
 	}
+
 	return res
 }
 
-func (s *sdkHttpServer) Get(path string, handler handleFunc) {
+func (s *SdkHttpServer) Get(path string, handler handleFunc) {
 	s.handler.addRoute(http.MethodGet, path, handler)
 }
-
-func (s *sdkHttpServer) Post(path string, handler handleFunc) {
+func (s *SdkHttpServer) Post(path string, handler handleFunc) {
 	s.handler.addRoute(http.MethodPost, path, handler)
 }
-
-func (s *sdkHttpServer) Delete(path string, handler handleFunc) {
+func (s *SdkHttpServer) Delete(path string, handler handleFunc) {
 	s.handler.addRoute(http.MethodDelete, path, handler)
 }
-func (s *sdkHttpServer) PUT(path string, handler handleFunc) {
+func (s *SdkHttpServer) PUT(path string, handler handleFunc) {
 	s.handler.addRoute(http.MethodPut, path, handler)
 }

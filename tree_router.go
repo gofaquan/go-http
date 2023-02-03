@@ -86,29 +86,30 @@ func (h *HandlerBasedOnTree) addRoute(method string, path string,
 	handleFunc handleFunc) {
 	// 校验
 	h.validatePattern(path)
-
 	root, ok := h.methodTrees[method]
+	// 新的 HTTP 方法
 	if !ok {
-		root = &node{path: "/"}
+		root = &node{path: "/"} // 创建根节点
 		h.methodTrees[method] = root
 	}
 
 	if path == "/" {
 		if root.handler != nil {
-			panic("根路由冲突! ")
+			panic("根路由冲突! ") // 二次注册 / 路由
 		}
 		root.handler = handleFunc
+		return
 	}
 
-	// 将path 按照 URL 的分隔符切割
-	// 例如，/user/friends 将变成 [user, friends]
+	// 将 path 按照 / 切割
+	// eg: /user/friends 将变成 [user, friends]
 	segs := strings.Split(path[1:], "/")
 	// 开始一段段处理
 	for _, s := range segs {
 		if s == "" {
-			panic(fmt.Sprintf("web: 非法路由。不允许使用 //a/b, /a//b 之类的路由, [%s]", path))
+			panic(fmt.Sprintf("web: 非法路由。不允许使用 //a/b, /a//b 之类路由, [%s]", path))
 		}
-		//filters = filters.childOrCreate(s)
+
 		// 从子节点里边找一个匹配到了当前 path 的节点
 		matchChild, found := h.matchChild(root, s)
 		if found {
@@ -119,11 +120,11 @@ func (h *HandlerBasedOnTree) addRoute(method string, path string,
 		}
 	}
 
-	if root.handler != nil {
-		panic("路由冲突! ")
-	}
-
-	root.handler = handleFunc
+	//if root.handler != nil {
+	//	panic("路由冲突! ")
+	//}
+	//
+	//root.handler = handleFunc
 }
 
 func (h *HandlerBasedOnTree) validatePattern(path string) {
@@ -154,10 +155,8 @@ func (h *HandlerBasedOnTree) validatePattern(path string) {
 func (h *HandlerBasedOnTree) matchChild(root *node, path string) (*node, bool) {
 	var wildcardNode *node
 	for _, child := range root.children {
-		// 并不是 * 的节点命中了，直接返回
-		// != * 是为了防止用户乱输入
-		if child.path == path &&
-			child.path != "*" {
+		// 并不是 * 的节点命中了，直接返回 , != * 是防止用户乱输入
+		if child.path == path && child.path != "*" {
 			return child, true
 		}
 		// 命中了通配符的，我们看看后面还有没有更加详细的
