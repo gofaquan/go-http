@@ -11,7 +11,7 @@ type V struct {
 }
 
 func TestHTTPServer(t *testing.T) {
-	server := NewHTTPServer()
+	server := NewHTTPServer("test")
 	server.Get("/query", func(ctx *Context) {
 		fmt.Println(ctx.QueryValue("a"))
 		fmt.Println(ctx.QueryValue("c"))

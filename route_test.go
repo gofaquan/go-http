@@ -189,7 +189,7 @@ func Test_router_AddRoute(t *testing.T) {
 	})
 }
 
-func (r router) equal(y router) (string, bool) {
+func (r *router) equal(y router) (string, bool) {
 	for k, v := range r.trees {
 		yv, ok := y.trees[k]
 		if !ok {

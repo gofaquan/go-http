@@ -1,28 +1,34 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 )
 
-type Server interface {
+type HttpServer interface {
 	http.Handler
 	Start(address string) error
+	Shutdown(ctx context.Context) error
 	addRoute(method, path string, handler HandleFunc, ms ...Middleware)
 }
 
 type HTTPServer struct {
+	name string
 	router
 	log *log.Logger
 }
 
 type ServerOption func(server *HTTPServer)
 
-func NewHTTPServer(opts ...ServerOption) *HTTPServer {
+func NewHTTPServer(name string, opts ...ServerOption) *HTTPServer {
 	s := &HTTPServer{
 		router: newRouter(),
+		name:   name,
 		log:    log.Default(),
 	}
 
@@ -91,6 +97,14 @@ func (h *HTTPServer) Start(addr string) error {
 
 	return http.Serve(l, h)
 	//return http.ListenAndServe(addr, h)
+}
+
+func (h *HTTPServer) Shutdown(ctx context.Context) error {
+	// sleep 模拟这个过程
+	fmt.Printf("%s shutdown...\n", h.name)
+	time.Sleep(time.Second)
+	fmt.Printf("%s shutdown!!!\n", h.name)
+	return nil
 }
 
 func (h *HTTPServer) Get(path string, handleFunc HandleFunc) {

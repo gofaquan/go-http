@@ -44,6 +44,7 @@ func (r *router) addRoute(method string, path string, handler HandleFunc, ms ...
 	segs := strings.Split(path[1:], "/")
 	for _, s := range segs {
 		if s == "" {
+			panic(fmt.Sprintf("web: 非法路由。不允许使用 //a/b, /a//b 之类的路由, [%s]", path))
 		}
 		root = root.childOrCreate(s)
 	}
