@@ -11,11 +11,10 @@ import (
 	"time"
 )
 
-// linux signal
 var signals = []os.Signal{
-	//os.Interrupt, os.Kill, syscall.SIGKILL, syscall.SIGSTOP,
+	os.Interrupt, os.Kill, syscall.SIGKILL,
 	syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGILL, syscall.SIGTRAP,
-	//syscall.SIGABRT, syscall.SIGSYS, syscall.SIGTERM,
+	syscall.SIGABRT, syscall.SIGTERM,
 }
 
 type Option func(*App)
@@ -29,12 +28,12 @@ func WithShutdownCallbacks(cbs ...ShutdownCallback) Option {
 }
 
 type App struct {
-	servers []*Server
+	servers []*HTTPServer
 
 	// 优雅退出整个超时时间，默认30秒
 	shutdownTimeout time.Duration
 
-	// 优雅退出时候等待处理已有请求时间，默认10秒钟
+	// 优雅退出时候等待处理已有请求时间，默认10秒
 	waitTime time.Duration
 	// 自定义回调超时时间，默认三秒钟
 	cbTimeout time.Duration
@@ -42,7 +41,7 @@ type App struct {
 	cbs []ShutdownCallback
 }
 
-func NewApp(servers []*Server, opts ...Option) *App {
+func NewApp(servers []*HTTPServer, opts ...Option) *App {
 	res := &App{
 		waitTime:        10 * time.Second,
 		cbTimeout:       3 * time.Second,
@@ -74,6 +73,7 @@ func (app *App) StartAndServe() {
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, signals...)
 	<-ch
+
 	println("hello")
 	go func() {
 		select {
@@ -94,8 +94,8 @@ func (app *App) shutdown() {
 		s.rejectReq()
 	}
 
+	// TODO go func 实时监听请求是否完成
 	log.Println("等待正在执行请求完结")
-	// 这里可以改造为实时统计正在处理的请求数量，为0 则下一步
 	time.Sleep(app.waitTime)
 
 	log.Println("开始关闭服务器")
@@ -132,56 +132,7 @@ func (app *App) shutdown() {
 }
 
 func (app *App) close() {
-	// 在这里释放掉一些可能的资源
+	// 释放掉一些可能的资源
 	time.Sleep(time.Second)
 	log.Println("应用关闭")
-}
-
-type Server struct {
-	srv  *http.Server
-	name string
-	mux  *serverMux
-}
-
-type serverMux struct {
-	reject bool
-	*http.ServeMux
-}
-
-func (s *serverMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if s.reject {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte("服务已关闭"))
-		return
-	}
-	s.ServeMux.ServeHTTP(w, r)
-}
-
-func NewServer(name string, addr string) *Server {
-	mux := &serverMux{ServeMux: http.NewServeMux()}
-	return &Server{
-		name: name,
-		mux:  mux,
-		srv: &http.Server{
-			Addr:    addr,
-			Handler: mux,
-		},
-	}
-}
-
-func (s *Server) Handle(pattern string, handler http.Handler) {
-	s.mux.Handle(pattern, handler)
-}
-
-func (s *Server) Start() error {
-	return s.srv.ListenAndServe()
-}
-
-func (s *Server) rejectReq() {
-	s.mux.reject = true
-}
-
-func (s *Server) stop(ctx context.Context) error {
-	log.Printf("服务器 %s 关闭中", s.name)
-	return s.srv.Shutdown(ctx)
 }

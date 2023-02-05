@@ -18,17 +18,20 @@ type HttpServer interface {
 }
 
 type HTTPServer struct {
-	name string
+	name   string
+	addr   string
+	reject bool
 	router
 	log *log.Logger
 }
 
 type ServerOption func(server *HTTPServer)
 
-func NewHTTPServer(name string, opts ...ServerOption) *HTTPServer {
+func NewHTTPServer(name, addr string, opts ...ServerOption) *HTTPServer {
 	s := &HTTPServer{
 		router: newRouter(),
 		name:   name,
+		addr:   addr,
 		log:    log.Default(),
 	}
 
@@ -40,6 +43,12 @@ func NewHTTPServer(name string, opts ...ServerOption) *HTTPServer {
 }
 
 func (h *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.reject {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("服务已关闭"))
+		return
+	}
+
 	ctx := &Context{
 		Request:        r,
 		ResponseWriter: w,
@@ -89,8 +98,8 @@ func (h *HTTPServer) flushResponse(ctx *Context) {
 	}
 }
 
-func (h *HTTPServer) Start(addr string) error {
-	l, err := net.Listen("tcp", addr)
+func (h *HTTPServer) Start() error {
+	l, err := net.Listen("tcp", h.addr)
 	if err != nil {
 		return err
 	}
@@ -105,6 +114,13 @@ func (h *HTTPServer) Shutdown(ctx context.Context) error {
 	time.Sleep(time.Second)
 	fmt.Printf("%s shutdown!!!\n", h.name)
 	return nil
+}
+func (h *HTTPServer) stop(ctx context.Context) error {
+	log.Printf("服务器 %s 关闭中", h.name)
+	return h.Shutdown(ctx)
+}
+func (h *HTTPServer) rejectReq() {
+	h.reject = true
 }
 
 func (h *HTTPServer) Get(path string, handleFunc HandleFunc) {
