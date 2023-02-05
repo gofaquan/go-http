@@ -11,7 +11,7 @@ type V struct {
 }
 
 func TestHTTPServer(t *testing.T) {
-	server := NewHTTPServer("test")
+	server := NewHTTPServer("test", "localhost:8080")
 	server.Get("/query", func(ctx *Context) {
 		fmt.Println(ctx.QueryValue("a"))
 		fmt.Println(ctx.QueryValue("c"))
@@ -48,7 +48,7 @@ func TestHTTPServer(t *testing.T) {
 		ctx.ResponseWithString(200, "delete 123")
 	})
 
-	err := server.Start("localhost:8080")
+	err := server.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
