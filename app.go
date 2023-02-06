@@ -23,7 +23,7 @@ type ShutdownCallback func(ctx context.Context)
 
 func WithShutdownCallbacks(cbs ...ShutdownCallback) Option {
 	return func(app *App) {
-		app.cbs = cbs
+		app.cbs = append(app.cbs, cbs...)
 	}
 }
 
@@ -74,7 +74,6 @@ func (app *App) StartAndServe() {
 	signal.Notify(ch, signals...)
 	<-ch
 
-	println("hello")
 	go func() {
 		select {
 		case <-ch:
@@ -94,7 +93,7 @@ func (app *App) shutdown() {
 		s.rejectReq()
 	}
 
-	// TODO go func 实时监听请求是否完成
+	//TODO go func 实时监听请求是否完成
 	log.Println("等待正在执行请求完结")
 	time.Sleep(app.waitTime)
 
